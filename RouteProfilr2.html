@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
+    <meta charset="utf-8">
+    <title>Showing elevation along a path</title>
+    <style>
+      /* Always set the map height explicitly to define the size of the div
+       * element that contains the map. */
+      #map {
+        height: 100%;
+      }
+      /* Optional: Makes the sample page fill the window. */
+      html, body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+	   #floating-panel {
+        position: absolute;
+        top: 10px;
+        left: 25%;
+        z-index: 5;
+        background-color: #fff;
+        padding: 5px;
+        border: 1px solid #999;
+        text-align: center;
+        font-family: 'Roboto','sans-serif';
+        line-height: 30px;
+        padding-left: 10px;
+      }
+    </style>
+    <script src="https://www.google.com/jsapi"></script>
+  </head>
+  <body>
+    <div>
+      <div id="map" style="height:400px;"></div>
+      <div id="elevation_chart"></div>
+	  <div id="floating-panel">
+    <b>Start: </b>
+    <input id="start" type="textbox">
+    <b>End: </b>
+    <input id="end" type="textbox">
+	<input id="submit" type="button" value="Submit">
+    </div>
+    <div id="map"></div>
+      <script>
+        // Load the Visualization API and the columnchart package.
+      google.load('visualization', '1', {packages: ['columnchart']});
+		
+	var elevator;
+      function initMap() {
+        // Create a map
+		var stepsArray = [];
+		var directionsService = new google.maps.DirectionsService;
+        var directionsDisplay = new google.maps.DirectionsRenderer;
+        var map = new google.maps.Map(document.getElementById('map'), {
+          zoom: 8,
+          center: new google.maps.LatLng(38, -93),
+          mapTypeId: 'terrain'
+        });
+		directionsDisplay.setMap(map);
+
+        // Create an ElevationService.
+        elevator = new google.maps.ElevationService;
+
+        // Draw the path, using the Visualization API and the Elevation service.
+        
+		var onChangeHandler = function() {
+          calculateAndDisplayRoute(directionsService, directionsDisplay, stepsArray);
+        };
+        document.getElementById('submit').addEventListener('click', onChangeHandler);
+      
+      //Calculate and display route
+      function calculateAndDisplayRoute(directionsService, directionsDisplay, stepsArray) {
+		stepsArray=[];
+		// Get driving directions
+        directionsService.route({
+          origin: document.getElementById('start').value,
+          destination: document.getElementById('end').value,
+          travelMode: 'DRIVING'
+        }, function(response, status) {
+          if (status === 'OK') {
+            directionsDisplay.setDirections(response);
+			showSteps(response, stepsArray, map);
+          } else {
+            window.alert('Directions request failed due to ' + status);
+          }
+        });
+      }
+      }
+	  
+	   function showSteps(directionResult, stepsArray, map) {
+        // For each step, place a marker, and add the text to the marker's infowindow.
+        // Also attach the marker to an array so we can keep track of it and remove it
+        // when calculating new routes.
+        var myRoute = directionResult.routes[0].legs[0];
+		var k = 0;
+        for (var i = 0; i < myRoute.steps.length; i++) {
+		  stepsArray[k] = myRoute.steps[i].start_location;
+		  k = k + 1;
+		}
+		stepsArray.push(myRoute.steps[myRoute.steps.length - 1].end_location);
+		findElevation(stepsArray, elevator);
+      }
+	function findElevation(stepsArray, elevator) {
+		// Get the elevation at each of the locations in the stepsArray 
+        elevator.getElevationAlongPath({
+          path: stepsArray,
+          samples: 512
+        }, plotElevation);
+      }
+
+      // Takes an array of ElevationResult objects, draws the path on the map
+      // and plots the elevation profile on a Visualization API ColumnChart.
+      function plotElevation(elevations, status) {
+        var chartDiv = document.getElementById('elevation_chart');
+        if (status !== 'OK') {
+          // Show the error code inside the chartDiv.
+          chartDiv.innerHTML = 'Cannot show elevation: request failed because ' +
+              status;
+          return;
+        }
+        // Create a new chart in the elevation_chart DIV.
+        var chart = new google.visualization.ColumnChart(chartDiv);
+
+        // Extract the data from which to populate the chart.
+        // Because the samples are equidistant, the 'Sample'
+        // column here does double duty as distance along the
+        // X axis.
+        var data = new google.visualization.DataTable();
+        data.addColumn('string', 'Sample');
+        data.addColumn('number', 'Elevation');
+        for (var i = 0; i < elevations.length; i++) {
+          data.addRow(['', elevations[i].elevation]);
+        }
+		
+        // Draw the chart using the data within its DIV.
+        chart.draw(data, {
+          height: 150,
+          legend: 'none',
+          titleY: 'Elevation (m)'
+        });
+      }
+      </script>
+      <script src="https://maps.googleapis.com/maps/api/js?callback=initMap"></script>
+    </div>
+  </body>
+</html>
